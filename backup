@@ -1,0 +1,36 @@
+#!/bin/sh
+
+# prompt for root
+if [ "$EUID" != 0 ]; then
+    sudo -E "$0" "$@"
+    exit $?
+fi
+
+DRIVE=$1
+if [ -z "$DRIVE" ]; then echo "drive required"; exit 1; fi
+
+set -xeu
+
+DIRNAME="$(date +"%Y-%m-%d")"
+BACKUP_PATH="/backup/backups/$DIRNAME"
+
+# mount the backup drive
+mkdir -p /backup
+mount "$DRIVE" /backup
+
+# register a cleanup handler
+clean_up() {
+    # wait 3 seconds, then unmount
+    sleep 3
+    umount /backup
+}
+trap clean_up EXIT
+
+# perform the backup
+mkdir -p "$BACKUP_PATH"
+rsync -aAXHvP \
+    --exclude={"/dev/*","/proc/*","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/lost+found","/backup/*","$HOME/.cache/*"} \
+    / "$BACKUP_PATH"
+
+# set owner
+chown -R "$USER:$USER" "$BACKUP_PATH"
